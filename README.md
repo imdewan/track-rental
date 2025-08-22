@@ -13,6 +13,31 @@ Track Rental is a modern, Progressive Web App (PWA) for rental management, built
 
 ---
 
+{{REWRITTEN_CODE}}
+## Usage
+
+To get started with Track Rental, follow these steps:
+
+1. **Sign in with Google:**
+   Begin by signing in using your Google account to access all features of Track Rental.
+
+2. **Add an Asset:**
+   Navigate to the **Assets** section and click "Add Asset." Fill in the details for the item you want to rent out (e.g., vehicle, equipment, property).
+
+3. **Add a Contact:**
+   Go to the **Contacts** section and click "Add Contact." Enter the contact's information. You may optionally upload a photo of ID Card for the contact.
+
+4. **Create a Rental:**
+   In the **Rentals** section, click "Create Rental."
+   - **Choose Asset:** Select the asset you want to rent from your list.
+   - **Choose Contact:** Select the contact who will be renting the asset.
+   - **Set Rate & Amount:** Enter the rental rate and the total amount.
+   - **Select Rental Type:** Choose whether the rental is **monthly** or **daily**.
+
+This workflow allows you to efficiently manage your assets, contacts, and rental agreements all in one place.
+
+---
+
 ## Getting Started
 
 Follow these steps to set up Track Rental locally:
