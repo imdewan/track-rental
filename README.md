@@ -9,7 +9,7 @@ Track Rental is a modern, Progressive Web App (PWA) for rental management, built
 - 🔥 **Powered by Firebase:** Real-time database, authentication, and cloud storage.
 - ⚡ **Built with Vite & React:** Lightning-fast development and production builds.
 - 🔒 **Secure & Scalable:** Environment variables for sensitive configuration, scalable cloud backend.
-- 🌐 **Live Demo:** [track-rental.web.app](https://track-rental.web.app)
+- 🌐 **Visit Website:** [track-rental.web.app](https://track-rental.web.app)
 
 ---
 
@@ -20,7 +20,7 @@ Follow these steps to set up Track Rental locally:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/track-rental.git
+git clone https://github.com/imdewan/track-rental.git
 cd track-rental
 ```
 
@@ -112,32 +112,15 @@ Track Rental is ready to deploy on [Firebase Hosting](https://firebase.google.co
 - **Vite** – Next-generation frontend tooling.
 - **Firebase** – Backend services for authentication, database, and hosting.
 - **PWA** – Progressive Web App features for offline support and installability.
-
----
-
-## License
-
-Track Rental is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
-```
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
-```
-
-You are free to use, modify, and distribute this software under the terms of the license.
+- **Tailwind CSS** – Utility-first CSS framework for styling.
+- **React Router** – Declarative routing for React applications.
 
 ---
 
 ## Contributing
 
 We welcome contributions! Please fork the repository, create a pull request, and help us improve Track Rental.
-
----
-
-## Support
-
-If you have any questions or need help, open an issue on GitHub or contact us at [support@track-rental.web.app](mailto:support@track-rental.web.app).
+For major changes, please open an issue first to discuss what you would like to change.
 
 ---
 
