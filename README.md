@@ -13,7 +13,7 @@ Track Rental is a modern, Progressive Web App (PWA) for rental management, built
 
 ---
 
-## Usage
+## How to Use
 
 To get started with Track Rental, follow these steps:
 
