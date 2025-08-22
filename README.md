@@ -1,6 +1,5 @@
-# Track Rental
+# <img src="https://track-rental.web.app/logo.png" alt="Track Rental Logo" width="32" height="32" style="vertical-align:middle;"> Track Rental
 
-![Track Rental Logo](https://track-rental.web.app/logo.png)
 
 Track Rental is a modern, Progressive Web App (PWA) for rental management, built with React, Vite, and Firebase. Whether you're managing vehicles, equipment, or property rentals, Track Rental provides a fast, secure, and user-friendly platform to streamline your workflow.
 
