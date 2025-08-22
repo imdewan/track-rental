@@ -94,6 +94,53 @@ Visit [http://localhost:5173](http://localhost:5173) in your browser to view the
 
 ---
 
+## Firestore & Storage Security Rules
+
+To keep your data secure and ensure users can only access their own documents and files, you can use the following Firestore and Storage rules. Add these in your Firebase console under **Firestore Rules** and **Storage Rules** respectively:
+
+### Firestore Rules
+
+```js
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Match all collections and documents
+    match /{collection}/{docId} {
+
+      // Allow read if the user owns the document
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+
+      // Allow create only if the userId in the document matches the authenticated user
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+
+      // Allow update and delete only if the existing document belongs to the user
+      allow update, delete: if request.auth != null
+                            && resource.data.userId == request.auth.uid;
+    }
+  }
+}
+```
+
+These rules ensure that each user can only read, create, update, or delete documents where the `userId` field matches their own Firebase UID.
+
+### Storage Rules
+
+```js
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /images/{userId}/{fileName} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
+
+These storage rules ensure that users can only read and write files in their own folder under `/images/{userId}/`, where `{userId}` matches their Firebase UID.
+
 ## Deployment
 
 Track Rental is ready to deploy on [Firebase Hosting](https://firebase.google.com/docs/hosting). To deploy:
