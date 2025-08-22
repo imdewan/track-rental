@@ -73,17 +73,6 @@ VITE_FIREBASE_APP_ID=your_app_id_here
 
 You can find these values in your Firebase project settings under **Project Overview > Project Settings > General**.
 
-#### Example:
-
-```env
-VITE_FIREBASE_API_KEY=AIzaSyA...
-VITE_FIREBASE_AUTH_DOMAIN=track-rental.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=track-rental
-VITE_FIREBASE_STORAGE_BUCKET=track-rental.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=1234567890
-VITE_FIREBASE_APP_ID=1:1234567890:web:abcdef123456
-```
-
 ### 4. Run the Development Server
 
 ```bash
