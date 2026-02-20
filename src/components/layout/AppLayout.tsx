@@ -3,6 +3,7 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Navbar from './Navbar';
 import { Toaster } from 'react-hot-toast';
+import MigrationPopup from '../MigrationPopup';
 
 const AppLayout: React.FC = () => {
   const { currentUser, loading } = useAuth();
@@ -25,7 +26,7 @@ const AppLayout: React.FC = () => {
       <main className="flex-grow px-4 py-6 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
         <Outlet />
       </main>
-      <Toaster 
+      <Toaster
         position="top-right"
         toastOptions={{
           duration: 3000,
@@ -35,6 +36,7 @@ const AppLayout: React.FC = () => {
           },
         }}
       />
+      <MigrationPopup />
     </div>
   );
 };

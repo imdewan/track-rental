@@ -149,7 +149,7 @@ const RentalForm: React.FC = () => {
         toast.success("Rental updated successfully");
       } else {
         await addRental(
-          rentalData as Omit<Rental, "id" | "createdAt">,
+          rentalData as Omit<Rental, "id" | "createdAt" | "totalPayments" | "totalExpenses" | "totalDues" | "netIncome" | "dataVersion" | "payments" | "expenses" | "dues">,
           currentUser.uid
         );
         toast.success("Rental added successfully");

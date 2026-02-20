@@ -80,10 +80,23 @@ export type Rental = {
   badgeColor: BadgeColor;
   badgeCharacter: string;
   status: "active" | "ended";
-  payments: Payment[];
-  expenses: Expense[];
-  dues: Due[];
   createdAt: Date;
+  // Denormalized summary fields
+  totalPayments: number;
+  totalExpenses: number;
+  totalDues: number;
+  netIncome: number;
+  dataVersion: number;
+  // Legacy fields (pre-migration only)
+  payments?: Payment[];
+  expenses?: Expense[];
+  dues?: Due[];
+};
+
+export type PaginatedResult<T> = {
+  items: T[];
+  lastDoc: any;
+  hasMore: boolean;
 };
 
 export type User = {

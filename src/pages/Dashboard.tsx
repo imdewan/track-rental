@@ -51,37 +51,11 @@ const Dashboard: React.FC = () => {
   });
 
   const calculateTotalRevenue = () => {
-    return rentals.reduce((total, rental) => {
-      const paymentTotal = Object.values(rental.payments ?? {}).reduce(
-        (sum, payment) => {
-          if (
-            payment &&
-            payment.status === "paid" &&
-            typeof payment.amount === "number"
-          ) {
-            return sum + payment.amount;
-          }
-          return sum;
-        },
-        0
-      );
-      return total + paymentTotal;
-    }, 0);
+    return rentals.reduce((total, rental) => total + (rental.totalPayments ?? 0), 0);
   };
 
   const calculateTotalExpenses = () => {
-    return rentals.reduce((total, rental) => {
-      const expenseTotal = Object.values(rental.expenses ?? {}).reduce(
-        (sum, expense) => {
-          if (expense && typeof expense.amount === "number") {
-            return sum + expense.amount;
-          }
-          return sum;
-        },
-        0
-      );
-      return total + expenseTotal;
-    }, 0);
+    return rentals.reduce((total, rental) => total + (rental.totalExpenses ?? 0), 0);
   };
 
   const rentalsWithOverduePayments = rentals.filter((rental) => {

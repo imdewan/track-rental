@@ -31,6 +31,12 @@ import {
   addDue,
   updateDue,
   deleteDue,
+  getPaymentsPaginated,
+  getExpensesPaginated,
+  getDuesPaginated,
+  getAllPayments,
+  getAllExpenses,
+  getAllDues,
 } from "../../firebase/firestore";
 import {
   Asset,
@@ -74,24 +80,30 @@ const RentalDetails: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [rental, setRentalFinal] = useState<Rental | null>(null);
-  const setRental = (rental: Rental | null) => {
-    if (rental) {
-      // Ensure payments, expenses, and dues are arrays
-      rental.payments = Array.isArray(rental.payments)
-        ? rental.payments
-        : Object.values(rental.payments || {});
-      rental.expenses = Array.isArray(rental.expenses)
-        ? rental.expenses
-        : Object.values(rental.expenses || {});
-      rental.dues = Array.isArray(rental.dues)
-        ? rental.dues
-        : Object.values(rental.dues || {});
-    }
-    setRentalFinal(rental);
-  };
+  const [rental, setRental] = useState<Rental | null>(null);
   const [asset, setAsset] = useState<Asset | null>(null);
   const [contact, setContact] = useState<Contact | null>(null);
+
+  // Subcollection data
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [dues, setDues] = useState<Due[]>([]);
+
+  // Pagination state
+  const [paymentsLastDoc, setPaymentsLastDoc] = useState<any>(undefined);
+  const [expensesLastDoc, setExpensesLastDoc] = useState<any>(undefined);
+  const [duesLastDoc, setDuesLastDoc] = useState<any>(undefined);
+  const [hasMorePayments, setHasMorePayments] = useState(false);
+  const [hasMoreExpenses, setHasMoreExpenses] = useState(false);
+  const [hasMoreDues, setHasMoreDues] = useState(false);
+  const [expensesLoaded, setExpensesLoaded] = useState(false);
+  const [duesLoaded, setDuesLoaded] = useState(false);
+
+  // PDF data
+  const [pdfPayments, setPdfPayments] = useState<Payment[]>([]);
+  const [pdfExpenses, setPdfExpenses] = useState<Expense[]>([]);
+  const [pdfDues, setPdfDues] = useState<Due[]>([]);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   // Payment states
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -154,6 +166,32 @@ const RentalDetails: React.FC = () => {
     },
   });
 
+  const refreshPayments = async () => {
+    if (!id) return;
+    const result = await getPaymentsPaginated(id);
+    setPayments(result.items);
+    setPaymentsLastDoc(result.lastDoc);
+    setHasMorePayments(result.hasMore);
+  };
+
+  const refreshExpenses = async () => {
+    if (!id) return;
+    const result = await getExpensesPaginated(id);
+    setExpenses(result.items);
+    setExpensesLastDoc(result.lastDoc);
+    setHasMoreExpenses(result.hasMore);
+    setExpensesLoaded(true);
+  };
+
+  const refreshDues = async () => {
+    if (!id) return;
+    const result = await getDuesPaginated(id);
+    setDues(result.items);
+    setDuesLastDoc(result.lastDoc);
+    setHasMoreDues(result.hasMore);
+    setDuesLoaded(true);
+  };
+
   useEffect(() => {
     const fetchRentalDetails = async () => {
       if (!id || !currentUser) return;
@@ -165,6 +203,12 @@ const RentalDetails: React.FC = () => {
           return;
         }
         setRental(fetchedRental);
+
+        // Fetch first page of payments (default tab)
+        const paymentResult = await getPaymentsPaginated(id);
+        setPayments(paymentResult.items);
+        setPaymentsLastDoc(paymentResult.lastDoc);
+        setHasMorePayments(paymentResult.hasMore);
 
         const [fetchedAsset, fetchedContact] = await Promise.all([
           getAssetById(fetchedRental.assetId),
@@ -180,6 +224,40 @@ const RentalDetails: React.FC = () => {
     };
     fetchRentalDetails();
   }, [id, currentUser, navigate]);
+
+  const handleTabChange = async (tab: "payments" | "expenses" | "dues") => {
+    setTabState(tab);
+    if (tab === "expenses" && !expensesLoaded && id) {
+      await refreshExpenses();
+    }
+    if (tab === "dues" && !duesLoaded && id) {
+      await refreshDues();
+    }
+  };
+
+  const loadMorePayments = async () => {
+    if (!id || !paymentsLastDoc) return;
+    const result = await getPaymentsPaginated(id, paymentsLastDoc);
+    setPayments((prev) => [...prev, ...result.items]);
+    setPaymentsLastDoc(result.lastDoc);
+    setHasMorePayments(result.hasMore);
+  };
+
+  const loadMoreExpenses = async () => {
+    if (!id || !expensesLastDoc) return;
+    const result = await getExpensesPaginated(id, expensesLastDoc);
+    setExpenses((prev) => [...prev, ...result.items]);
+    setExpensesLastDoc(result.lastDoc);
+    setHasMoreExpenses(result.hasMore);
+  };
+
+  const loadMoreDues = async () => {
+    if (!id || !duesLastDoc) return;
+    const result = await getDuesPaginated(id, duesLastDoc);
+    setDues((prev) => [...prev, ...result.items]);
+    setDuesLastDoc(result.lastDoc);
+    setHasMoreDues(result.hasMore);
+  };
 
   // Payment handlers
   const openAddPaymentModal = () => {
@@ -240,6 +318,7 @@ const RentalDetails: React.FC = () => {
       }
       const updatedRental = await getRentalById(id);
       setRental(updatedRental);
+      await refreshPayments();
       setIsPaymentModalOpen(false);
     } catch {
       toast.error("Failed to save payment");
@@ -252,6 +331,7 @@ const RentalDetails: React.FC = () => {
       await deletePayment(id, selectedPayment.id);
       const updatedRental = await getRentalById(id);
       setRental(updatedRental);
+      await refreshPayments();
       toast.success("Payment deleted successfully");
       setIsDeletePaymentModalOpen(false);
     } catch {
@@ -307,6 +387,7 @@ const RentalDetails: React.FC = () => {
       }
       const updatedRental = await getRentalById(id);
       setRental(updatedRental);
+      await refreshExpenses();
       setIsExpenseModalOpen(false);
     } catch {
       toast.error("Failed to save expense");
@@ -319,6 +400,7 @@ const RentalDetails: React.FC = () => {
       await deleteExpense(id, selectedExpense.id);
       const updatedRental = await getRentalById(id);
       setRental(updatedRental);
+      await refreshExpenses();
       toast.success("Expense deleted successfully");
       setIsDeleteExpenseModalOpen(false);
     } catch {
@@ -374,6 +456,7 @@ const RentalDetails: React.FC = () => {
       }
       const updatedRental = await getRentalById(id);
       setRental(updatedRental);
+      await refreshDues();
       setIsDueModalOpen(false);
     } catch {
       toast.error("Failed to save due");
@@ -386,6 +469,7 @@ const RentalDetails: React.FC = () => {
       await deleteDue(id, selectedDue.id);
       const updatedRental = await getRentalById(id);
       setRental(updatedRental);
+      await refreshDues();
       toast.success("Due deleted successfully");
       setIsDeleteDueModalOpen(false);
     } catch {
@@ -394,7 +478,25 @@ const RentalDetails: React.FC = () => {
   };
 
   // PDF generation
-  const openPdfModal = () => setIsPdfModalOpen(true);
+  const openPdfModal = async () => {
+    if (!id) return;
+    setPdfLoading(true);
+    setIsPdfModalOpen(true);
+    try {
+      const [allPayments, allExpenses, allDues] = await Promise.all([
+        getAllPayments(id),
+        getAllExpenses(id),
+        getAllDues(id),
+      ]);
+      setPdfPayments(allPayments);
+      setPdfExpenses(allExpenses);
+      setPdfDues(allDues);
+    } catch {
+      toast.error("Failed to load statement data");
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   const now = new Date();
   const formattedDateTime = format(now, "yyyy-MM-dd_HH_mm_ss");
@@ -402,23 +504,11 @@ const RentalDetails: React.FC = () => {
     filename: `Rental_Statement_${formattedDateTime}.pdf`,
   });
 
-  const calculateTotalPayments = () => {
-    if (!rental) return 0;
-    const payments = Array.isArray(rental.payments) ? rental.payments : [];
-    return payments.reduce((sum, payment) => {
-      if (payment.status === "paid") {
-        return sum + payment.amount;
-      }
-      return sum;
-    }, 0);
-  };
+  const totalPayments = rental?.totalPayments ?? 0;
+  const totalExpenses = rental?.totalExpenses ?? 0;
+  const totalDues = rental?.totalDues ?? 0;
+  const netIncome = rental?.netIncome ?? 0;
 
-  const calculateTotalExpenses = () => {
-    if (!rental || !Array.isArray(rental.expenses)) return 0;
-    return rental.expenses.reduce((sum, expense) => sum + expense.amount, 0);
-  };
-
-  const netIncome = calculateTotalPayments() - calculateTotalExpenses();
   const [isIdCardModalOpen, setIsIdCardModalOpen] = useState(false);
   const [tabState, setTabState] = useState<"payments" | "expenses" | "dues">(
     "payments"
@@ -554,12 +644,9 @@ const RentalDetails: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Total Due</p>
-                  {rental.dues && rental.dues.length > 0 ? (
+                  {totalDues > 0 ? (
                     <p className="font-medium text-red-600">
-                      ₹
-                      {rental.dues
-                        .reduce((sum, due) => sum + due.amount, 0)
-                        .toLocaleString()}
+                      ₹{totalDues.toLocaleString()}
                     </p>
                   ) : (
                     <p className="font-medium text-green-600">No Due</p>
@@ -714,13 +801,13 @@ const RentalDetails: React.FC = () => {
                 <div className="flex justify-between items-center">
                   <p className="text-gray-600">Total Payments</p>
                   <p className="text-green-600 font-medium">
-                    ₹{calculateTotalPayments().toLocaleString()}
+                    ₹{totalPayments.toLocaleString()}
                   </p>
                 </div>
                 <div className="flex justify-between items-center">
                   <p className="text-gray-600">Total Expenses</p>
                   <p className="text-red-600 font-medium">
-                    ₹{calculateTotalExpenses().toLocaleString()}
+                    ₹{totalExpenses.toLocaleString()}
                   </p>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-gray-200">
@@ -760,7 +847,9 @@ const RentalDetails: React.FC = () => {
                   ${tabState === tab.key ? "cursor-default" : ""}
                 `}
                     onClick={() =>
-                      setTabState(tab.key as "payments" | "expenses" | "dues")
+                      handleTabChange(
+                        tab.key as "payments" | "expenses" | "dues"
+                      )
                     }
                     type="button"
                     style={{
@@ -792,83 +881,86 @@ const RentalDetails: React.FC = () => {
                     </Button>
                   </CardHeader>
                   <CardBody className="p-0">
-                    {Array.isArray(rental.payments) &&
-                    rental.payments.length > 0 ? (
+                    {payments.length > 0 ? (
                       <div className="flex flex-col gap-4 p-4">
-                        {rental.payments
-                          .sort(
-                            (a, b) =>
-                              new Date(b.date).getTime() -
-                              new Date(a.date).getTime()
-                          )
-                          .map((payment) => (
-                            <div
-                              key={payment.id}
-                              className="bg-white rounded-lg shadow border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 overflow-x-auto"
-                            >
-                              <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2 sm:gap-6 items-start sm:items-center w-full">
-                                <div className="min-w-[110px] flex-shrink-0">
-                                  <div className="text-xs text-gray-500">
-                                    Date
-                                  </div>
-                                  <div className="font-medium text-gray-900 whitespace-nowrap">
-                                    {format(payment.date, "MMM dd, yyyy")}
-                                  </div>
+                        {payments.map((payment) => (
+                          <div
+                            key={payment.id}
+                            className="bg-white rounded-lg shadow border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 overflow-x-auto"
+                          >
+                            <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2 sm:gap-6 items-start sm:items-center w-full">
+                              <div className="min-w-[110px] flex-shrink-0">
+                                <div className="text-xs text-gray-500">
+                                  Date
                                 </div>
-                                <div className="min-w-[120px] flex-shrink-0">
-                                  <div className="text-xs text-gray-500">
-                                    Amount
-                                  </div>
-                                  <div className="font-semibold text-green-700 whitespace-nowrap">
-                                    ₹{payment.amount.toLocaleString()}
-                                  </div>
+                                <div className="font-medium text-gray-900 whitespace-nowrap">
+                                  {format(payment.date, "MMM dd, yyyy")}
                                 </div>
-                                <div className="min-w-[60px] flex-shrink-0">
-                                  <div className="text-xs text-gray-500">
-                                    Status
-                                  </div>
-                                  <span
-                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                              </div>
+                              <div className="min-w-[120px] flex-shrink-0">
+                                <div className="text-xs text-gray-500">
+                                  Amount
+                                </div>
+                                <div className="font-semibold text-green-700 whitespace-nowrap">
+                                  ₹{payment.amount.toLocaleString()}
+                                </div>
+                              </div>
+                              <div className="min-w-[60px] flex-shrink-0">
+                                <div className="text-xs text-gray-500">
+                                  Status
+                                </div>
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                       ${
                                         payment.status === "paid"
                                           ? "bg-green-100 text-green-800"
                                           : "bg-yellow-100 text-yellow-800"
                                       }`}
-                                  >
-                                    {payment.status === "paid"
-                                      ? "Paid"
-                                      : "Pending"}
-                                  </span>
-                                </div>
-                                <div className="min-w-0 max-w-xs flex-1">
-                                  <div className="text-xs text-gray-500">
-                                    Notes
-                                  </div>
-                                  <div className="truncate text-gray-700 text-sm">
-                                    {payment.notes || "-"}
-                                  </div>
-                                </div>
+                                >
+                                  {payment.status === "paid"
+                                    ? "Paid"
+                                    : "Pending"}
+                                </span>
                               </div>
-                              <div className="flex gap-2 flex-shrink-0">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  icon={<Edit size={16} />}
-                                  onClick={() => openEditPaymentModal(payment)}
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  variant="danger"
-                                  size="sm"
-                                  icon={<Trash2 size={16} />}
-                                  onClick={() => confirmDeletePayment(payment)}
-                                >
-                                  Delete
-                                </Button>
+                              <div className="min-w-0 max-w-xs flex-1">
+                                <div className="text-xs text-gray-500">
+                                  Notes
+                                </div>
+                                <div className="truncate text-gray-700 text-sm">
+                                  {payment.notes || "-"}
+                                </div>
                               </div>
                             </div>
-                          ))}
+                            <div className="flex gap-2 flex-shrink-0">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                icon={<Edit size={16} />}
+                                onClick={() => openEditPaymentModal(payment)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                icon={<Trash2 size={16} />}
+                                onClick={() => confirmDeletePayment(payment)}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        {hasMorePayments && (
+                          <div className="flex justify-center py-2">
+                            <Button
+                              variant="outline"
+                              onClick={loadMorePayments}
+                            >
+                              Load More Payments
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="py-8 px-4 text-center">
@@ -905,65 +997,69 @@ const RentalDetails: React.FC = () => {
                     </Button>
                   </CardHeader>
                   <CardBody className="p-0">
-                    {rental.expenses.length > 0 ? (
+                    {expenses.length > 0 ? (
                       <div className="flex flex-col gap-4 p-4">
-                        {rental.expenses
-                          .sort(
-                            (a, b) =>
-                              new Date(b.date).getTime() -
-                              new Date(a.date).getTime()
-                          )
-                          .map((expense) => (
-                            <div
-                              key={expense.id}
-                              className="bg-white rounded-lg shadow border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 overflow-x-auto"
-                            >
-                              <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2 sm:gap-6 items-start sm:items-center">
-                                <div className="min-w-[110px] flex-shrink-0">
-                                  <div className="text-xs text-gray-500">
-                                    Date
-                                  </div>
-                                  <div className="font-medium text-gray-900 whitespace-nowrap">
-                                    {format(expense.date, "MMM dd, yyyy")}
-                                  </div>
+                        {expenses.map((expense) => (
+                          <div
+                            key={expense.id}
+                            className="bg-white rounded-lg shadow border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 overflow-x-auto"
+                          >
+                            <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2 sm:gap-6 items-start sm:items-center">
+                              <div className="min-w-[110px] flex-shrink-0">
+                                <div className="text-xs text-gray-500">
+                                  Date
                                 </div>
-                                <div className="min-w-[120px] flex-shrink-0">
-                                  <div className="text-xs text-gray-500">
-                                    Amount
-                                  </div>
-                                  <div className="font-semibold text-red-700 whitespace-nowrap">
-                                    ₹{expense.amount.toLocaleString()}
-                                  </div>
-                                </div>
-                                <div className="min-w-0 max-w-xs flex-1">
-                                  <div className="text-xs text-gray-500">
-                                    Description
-                                  </div>
-                                  <div className="truncate text-gray-700 text-sm">
-                                    {expense.description}
-                                  </div>
+                                <div className="font-medium text-gray-900 whitespace-nowrap">
+                                  {format(expense.date, "MMM dd, yyyy")}
                                 </div>
                               </div>
-                              <div className="flex gap-2 flex-shrink-0">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  icon={<Edit size={16} />}
-                                  onClick={() => openEditExpenseModal(expense)}
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  variant="danger"
-                                  size="sm"
-                                  icon={<Trash2 size={16} />}
-                                  onClick={() => confirmDeleteExpense(expense)}
-                                >
-                                  Delete
-                                </Button>
+                              <div className="min-w-[120px] flex-shrink-0">
+                                <div className="text-xs text-gray-500">
+                                  Amount
+                                </div>
+                                <div className="font-semibold text-red-700 whitespace-nowrap">
+                                  ₹{expense.amount.toLocaleString()}
+                                </div>
+                              </div>
+                              <div className="min-w-0 max-w-xs flex-1">
+                                <div className="text-xs text-gray-500">
+                                  Description
+                                </div>
+                                <div className="truncate text-gray-700 text-sm">
+                                  {expense.description}
+                                </div>
                               </div>
                             </div>
-                          ))}
+                            <div className="flex gap-2 flex-shrink-0">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                icon={<Edit size={16} />}
+                                onClick={() => openEditExpenseModal(expense)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                icon={<Trash2 size={16} />}
+                                onClick={() => confirmDeleteExpense(expense)}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        {hasMoreExpenses && (
+                          <div className="flex justify-center py-2">
+                            <Button
+                              variant="outline"
+                              onClick={loadMoreExpenses}
+                            >
+                              Load More Expenses
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="py-8 px-4 text-center">
@@ -1000,65 +1096,66 @@ const RentalDetails: React.FC = () => {
                     </Button>
                   </CardHeader>
                   <CardBody className="p-0">
-                    {rental.dues && rental.dues.length > 0 ? (
+                    {dues.length > 0 ? (
                       <div className="flex flex-col gap-4 p-4">
-                        {rental.dues
-                          .sort(
-                            (a, b) =>
-                              new Date(b.date).getTime() -
-                              new Date(a.date).getTime()
-                          )
-                          .map((due) => (
-                            <div
-                              key={due.id}
-                              className="bg-white rounded-lg shadow border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 overflow-x-auto"
-                            >
-                              <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2 sm:gap-6 items-start sm:items-center">
-                                <div className="min-w-[110px] flex-shrink-0">
-                                  <div className="text-xs text-gray-500">
-                                    Due Date
-                                  </div>
-                                  <div className="font-medium text-gray-900 whitespace-nowrap">
-                                    {format(due.date, "MMM dd, yyyy")}
-                                  </div>
+                        {dues.map((due) => (
+                          <div
+                            key={due.id}
+                            className="bg-white rounded-lg shadow border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 overflow-x-auto"
+                          >
+                            <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2 sm:gap-6 items-start sm:items-center">
+                              <div className="min-w-[110px] flex-shrink-0">
+                                <div className="text-xs text-gray-500">
+                                  Due Date
                                 </div>
-                                <div className="min-w-[120px] flex-shrink-0">
-                                  <div className="text-xs text-gray-500">
-                                    Amount
-                                  </div>
-                                  <div className="font-semibold text-orange-700 whitespace-nowrap">
-                                    ₹{due.amount.toLocaleString()}
-                                  </div>
-                                </div>
-                                <div className="min-w-0 max-w-xs flex-1">
-                                  <div className="text-xs text-gray-500">
-                                    Notes
-                                  </div>
-                                  <div className="truncate text-gray-700 text-sm">
-                                    {due.description}
-                                  </div>
+                                <div className="font-medium text-gray-900 whitespace-nowrap">
+                                  {format(due.date, "MMM dd, yyyy")}
                                 </div>
                               </div>
-                              <div className="flex gap-2 flex-shrink-0">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  icon={<Edit size={16} />}
-                                  onClick={() => openEditDueModal(due)}
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  variant="danger"
-                                  size="sm"
-                                  icon={<Trash2 size={16} />}
-                                  onClick={() => confirmDeleteDue(due)}
-                                >
-                                  Delete
-                                </Button>
+                              <div className="min-w-[120px] flex-shrink-0">
+                                <div className="text-xs text-gray-500">
+                                  Amount
+                                </div>
+                                <div className="font-semibold text-orange-700 whitespace-nowrap">
+                                  ₹{due.amount.toLocaleString()}
+                                </div>
+                              </div>
+                              <div className="min-w-0 max-w-xs flex-1">
+                                <div className="text-xs text-gray-500">
+                                  Notes
+                                </div>
+                                <div className="truncate text-gray-700 text-sm">
+                                  {due.description}
+                                </div>
                               </div>
                             </div>
-                          ))}
+                            <div className="flex gap-2 flex-shrink-0">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                icon={<Edit size={16} />}
+                                onClick={() => openEditDueModal(due)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                icon={<Trash2 size={16} />}
+                                onClick={() => confirmDeleteDue(due)}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        {hasMoreDues && (
+                          <div className="flex justify-center py-2">
+                            <Button variant="outline" onClick={loadMoreDues}>
+                              Load More Dues
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="py-8 px-4 text-center">
@@ -1366,227 +1463,252 @@ const RentalDetails: React.FC = () => {
         size="xl"
       >
         <div className="space-y-4">
-          <div
-            className="bg-white p-4 w-full justify-center"
-            ref={targetRef}
-            style={{ overflow: "visible" }}
-          >
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Rental Statement
-              </h2>
-              <p className="text-gray-600">
-                Generated on {format(new Date(), "MMMM dd, yyyy")}
-              </p>
+          {pdfLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
             </div>
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">
-                  Rental Information
-                </h3>
-                <div className="space-y-1">
-                  <p>
-                    <span className="font-medium">Asset:</span> {asset.name} (
-                    {asset.category})
-                  </p>
-                  <p>
-                    <span className="font-medium">ID/Reg Number:</span>{" "}
-                    {asset.registrationNumber}
-                  </p>
-                  <p>
-                    <span className="font-medium">Start Date:</span>{" "}
-                    {format(rental.startDate, "MMMM dd, yyyy")}
-                  </p>
-                  <p>
-                    <span className="font-medium">Rate:</span> ₹
-                    {rental.rate.toLocaleString()} / {rental.rateType}
-                  </p>
-                  <p>
-                    <span className="font-medium">Status:</span>{" "}
-                    {rental.status === "active" ? "Active" : "Ended"}
+          ) : (
+            <>
+              <div
+                className="bg-white p-4 w-full justify-center"
+                ref={targetRef}
+                style={{ overflow: "visible" }}
+              >
+                <div className="text-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Rental Statement
+                  </h2>
+                  <p className="text-gray-600">
+                    Generated on {format(new Date(), "MMMM dd, yyyy")}
                   </p>
                 </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-2">
-                  Contact Information
-                </h3>
-                <div className="space-y-1">
-                  <p>
-                    <span className="font-medium">Name:</span> {contact.name}
-                  </p>
-                  <p>
-                    <span className="font-medium">Phone:</span> {contact.phone}
-                  </p>
-                  <p>
-                    <span className="font-medium">Alternative Phone:</span>{" "}
-                    {contact.alternatePhone}
-                  </p>
-                  <p>
-                    <span className="font-medium">Address:</span>{" "}
-                    {contact.address}
-                  </p>
+                <div className="grid grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">
+                      Rental Information
+                    </h3>
+                    <div className="space-y-1">
+                      <p>
+                        <span className="font-medium">Asset:</span> {asset.name}{" "}
+                        ({asset.category})
+                      </p>
+                      <p>
+                        <span className="font-medium">ID/Reg Number:</span>{" "}
+                        {asset.registrationNumber}
+                      </p>
+                      <p>
+                        <span className="font-medium">Start Date:</span>{" "}
+                        {format(rental.startDate, "MMMM dd, yyyy")}
+                      </p>
+                      <p>
+                        <span className="font-medium">Rate:</span> ₹
+                        {rental.rate.toLocaleString()} / {rental.rateType}
+                      </p>
+                      <p>
+                        <span className="font-medium">Status:</span>{" "}
+                        {rental.status === "active" ? "Active" : "Ended"}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">
+                      Contact Information
+                    </h3>
+                    <div className="space-y-1">
+                      <p>
+                        <span className="font-medium">Name:</span>{" "}
+                        {contact.name}
+                      </p>
+                      <p>
+                        <span className="font-medium">Phone:</span>{" "}
+                        {contact.phone}
+                      </p>
+                      <p>
+                        <span className="font-medium">Alternative Phone:</span>{" "}
+                        {contact.alternatePhone}
+                      </p>
+                      <p>
+                        <span className="font-medium">Address:</span>{" "}
+                        {contact.address}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-3">Payment History</h3>
-              {rental.payments.length > 0 ? (
-                <table
-                  className="min-w-full border border-gray-300"
-                  style={{ tableLayout: "auto" }}
-                >
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="py-2 px-4 border-b text-left">Date</th>
-                      <th className="py-2 px-4 border-b text-left">Amount</th>
-                      <th className="py-2 px-4 border-b text-left">Status</th>
-                      <th className="py-2 px-4 border-b text-left">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rental.payments
-                      .sort(
-                        (a, b) =>
-                          new Date(b.date).getTime() -
-                          new Date(a.date).getTime()
-                      )
-                      .map((payment) => (
-                        <tr key={payment.id} className="border-b">
-                          <td className="py-2 px-4">
-                            {format(payment.date, "MMM dd, yyyy")}
-                          </td>
-                          <td className="py-2 px-4">
-                            ₹{payment.amount.toLocaleString()}
-                          </td>
-                          <td className="py-2 px-4">
-                            {payment.status === "paid" ? "Paid" : "Pending"}
-                          </td>
-                          <td className="py-2 px-4">{payment.notes || "-"}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="text-gray-500 italic">No payments recorded</p>
-              )}
-            </div>
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-3">Expense History</h3>
-              {rental.expenses.length > 0 ? (
-                <table
-                  className="min-w-full border border-gray-300"
-                  style={{ tableLayout: "auto" }}
-                >
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="py-2 px-4 border-b text-left">Date</th>
-                      <th className="py-2 px-4 border-b text-left">Amount</th>
-                      <th className="py-2 px-4 border-b text-left">
-                        Description
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rental.expenses
-                      .sort(
-                        (a, b) =>
-                          new Date(b.date).getTime() -
-                          new Date(a.date).getTime()
-                      )
-                      .map((expense) => (
-                        <tr key={expense.id} className="border-b">
-                          <td className="py-2 px-4">
-                            {format(expense.date, "MMM dd, yyyy")}
-                          </td>
-                          <td className="py-2 px-4">
-                            ₹{expense.amount.toLocaleString()}
-                          </td>
-                          <td className="py-2 px-4">{expense.description}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="text-gray-500 italic">No expenses recorded</p>
-              )}
-            </div>
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-3">Due Amounts</h3>
-              {rental.dues && rental.dues.length > 0 ? (
-                <table
-                  className="min-w-full border border-gray-300"
-                  style={{ tableLayout: "auto" }}
-                >
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="py-2 px-4 border-b text-left">Due Date</th>
-                      <th className="py-2 px-4 border-b text-left">Amount</th>
-                      <th className="py-2 px-4 border-b text-left">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rental.dues
-                      .sort(
-                        (a, b) =>
-                          new Date(b.date).getTime() -
-                          new Date(a.date).getTime()
-                      )
-                      .map((due) => (
-                        <tr key={due.id} className="border-b">
-                          <td className="py-2 px-4">
-                            {format(due.date, "MMM dd, yyyy")}
-                          </td>
-                          <td className="py-2 px-4">
-                            ₹{due.amount.toLocaleString()}
-                          </td>
-                          <td className="py-2 px-4">{due.description}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="text-gray-500 italic">No due amounts recorded</p>
-              )}
-            </div>
-            <div className="border-t border-gray-300 pt-4">
-              <h3 className="text-lg font-semibold mb-3">Financial Summary</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="flex justify-between py-1">
-                    <span className="font-medium">Total Payments:</span>
-                    <span className="text-green-600">
-                      ₹{calculateTotalPayments().toLocaleString()}
-                    </span>
-                  </p>
-                  <p className="flex justify-between py-1">
-                    <span className="font-medium">Total Expenses:</span>
-                    <span className="text-red-600">
-                      ₹{calculateTotalExpenses().toLocaleString()}
-                    </span>
-                  </p>
-                  <p className="flex justify-between border-t border-gray-300 mt-2 pt-2">
-                    <span className="font-bold">Net Income:</span>
-                    <span
-                      className={`font-bold ${
-                        netIncome >= 0 ? "text-green-600" : "text-red-600"
-                      }`}
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold mb-3">
+                    Payment History
+                  </h3>
+                  {pdfPayments.length > 0 ? (
+                    <table
+                      className="min-w-full border border-gray-300"
+                      style={{ tableLayout: "auto" }}
                     >
-                      ₹{netIncome.toLocaleString()}
-                    </span>
-                  </p>
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="py-2 px-4 border-b text-left">Date</th>
+                          <th className="py-2 px-4 border-b text-left">
+                            Amount
+                          </th>
+                          <th className="py-2 px-4 border-b text-left">
+                            Status
+                          </th>
+                          <th className="py-2 px-4 border-b text-left">
+                            Notes
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pdfPayments.map((payment) => (
+                          <tr key={payment.id} className="border-b">
+                            <td className="py-2 px-4">
+                              {format(payment.date, "MMM dd, yyyy")}
+                            </td>
+                            <td className="py-2 px-4">
+                              ₹{payment.amount.toLocaleString()}
+                            </td>
+                            <td className="py-2 px-4">
+                              {payment.status === "paid" ? "Paid" : "Pending"}
+                            </td>
+                            <td className="py-2 px-4">
+                              {payment.notes || "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-gray-500 italic">
+                      No payments recorded
+                    </p>
+                  )}
+                </div>
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold mb-3">
+                    Expense History
+                  </h3>
+                  {pdfExpenses.length > 0 ? (
+                    <table
+                      className="min-w-full border border-gray-300"
+                      style={{ tableLayout: "auto" }}
+                    >
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="py-2 px-4 border-b text-left">Date</th>
+                          <th className="py-2 px-4 border-b text-left">
+                            Amount
+                          </th>
+                          <th className="py-2 px-4 border-b text-left">
+                            Description
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pdfExpenses.map((expense) => (
+                          <tr key={expense.id} className="border-b">
+                            <td className="py-2 px-4">
+                              {format(expense.date, "MMM dd, yyyy")}
+                            </td>
+                            <td className="py-2 px-4">
+                              ₹{expense.amount.toLocaleString()}
+                            </td>
+                            <td className="py-2 px-4">
+                              {expense.description}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-gray-500 italic">
+                      No expenses recorded
+                    </p>
+                  )}
+                </div>
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold mb-3">Due Amounts</h3>
+                  {pdfDues.length > 0 ? (
+                    <table
+                      className="min-w-full border border-gray-300"
+                      style={{ tableLayout: "auto" }}
+                    >
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="py-2 px-4 border-b text-left">
+                            Due Date
+                          </th>
+                          <th className="py-2 px-4 border-b text-left">
+                            Amount
+                          </th>
+                          <th className="py-2 px-4 border-b text-left">
+                            Notes
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pdfDues.map((due) => (
+                          <tr key={due.id} className="border-b">
+                            <td className="py-2 px-4">
+                              {format(due.date, "MMM dd, yyyy")}
+                            </td>
+                            <td className="py-2 px-4">
+                              ₹{due.amount.toLocaleString()}
+                            </td>
+                            <td className="py-2 px-4">{due.description}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-gray-500 italic">
+                      No due amounts recorded
+                    </p>
+                  )}
+                </div>
+                <div className="border-t border-gray-300 pt-4">
+                  <h3 className="text-lg font-semibold mb-3">
+                    Financial Summary
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="flex justify-between py-1">
+                        <span className="font-medium">Total Payments:</span>
+                        <span className="text-green-600">
+                          ₹{totalPayments.toLocaleString()}
+                        </span>
+                      </p>
+                      <p className="flex justify-between py-1">
+                        <span className="font-medium">Total Expenses:</span>
+                        <span className="text-red-600">
+                          ₹{totalExpenses.toLocaleString()}
+                        </span>
+                      </p>
+                      <p className="flex justify-between border-t border-gray-300 mt-2 pt-2">
+                        <span className="font-bold">Net Income:</span>
+                        <span
+                          className={`font-bold ${
+                            netIncome >= 0 ? "text-green-600" : "text-red-600"
+                          }`}
+                        >
+                          ₹{netIncome.toLocaleString()}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-          <div className="flex justify-end space-x-3">
-            <Button variant="outline" onClick={() => setIsPdfModalOpen(false)}>
-              Close
-            </Button>
-            <Button variant="primary" onClick={() => toPDF()}>
-              Download PDF
-            </Button>
-          </div>
+              <div className="flex justify-end space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsPdfModalOpen(false)}
+                >
+                  Close
+                </Button>
+                <Button variant="primary" onClick={() => toPDF()}>
+                  Download PDF
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>
